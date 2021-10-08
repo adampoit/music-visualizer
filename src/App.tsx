@@ -120,7 +120,7 @@ function App() {
 
         const images = await imagesResponse.json();
         for (const image of images) {
-          yield `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(${image.urls.raw}?w=${window.innerWidth}&h=${window.innerHeight}) no-repeat center center fixed`;
+          yield `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(${image.urls.raw}&fit=crop&w=${window.innerWidth}&h=${window.innerHeight}) no-repeat center center fixed`;
         }
       }
     }
