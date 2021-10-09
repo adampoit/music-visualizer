@@ -57,3 +57,18 @@
     transform: rotate(360deg);
   }
 }
+
+.photo-credits {
+  position: absolute;
+  top: 25px;
+  left: 25px;
+  width: 100%;
+}
+
+.photo-credits img {
+  float: left;
+  height: 38px;
+  width: 38px;
+  margin-right: 10px;
+  border-radius: 50%;
+}

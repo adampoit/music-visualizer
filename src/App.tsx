@@ -7,9 +7,19 @@ declare global {
   }
 }
 
+interface PhotographerInfo {
+  name: string;
+  username: string;
+  profilePhoto: string;
+}
+
 function App() {
   const [background1Style, setBackground1Style] = useState<CSSProperties>();
   const [background2Style, setBackground2Style] = useState<CSSProperties>();
+  const [photographer1Info, setPhotographer1Info] =
+    useState<PhotographerInfo>();
+  const [photographer2Info, setPhotographer2Info] =
+    useState<PhotographerInfo>();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const WIDTH = 800;
@@ -106,7 +116,10 @@ function App() {
   }, []);
 
   useEffect(() => {
-    async function* backgroundGenerator(): AsyncGenerator<string> {
+    async function* backgroundGenerator(): AsyncGenerator<{
+      background: string;
+      photographerInfo: PhotographerInfo;
+    }> {
       while (true) {
         const imagesResponse = await fetch(
           "https://api.unsplash.com/photos/random?topics=6sMVjTLSkeQ&orientation=landscape&content_filter=high&count=30",
@@ -120,7 +133,14 @@ function App() {
 
         const images = await imagesResponse.json();
         for (const image of images) {
-          yield `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(${image.urls.raw}&fit=crop&w=${window.innerWidth}&h=${window.innerHeight}) no-repeat center center fixed`;
+          yield {
+            background: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(${image.urls.raw}&fit=crop&w=${window.innerWidth}&h=${window.innerHeight}) no-repeat center center fixed`,
+            photographerInfo: {
+              name: image.user.name,
+              username: image.user.username,
+              profilePhoto: image.user.profile_image.medium,
+            },
+          };
         }
       }
     }
@@ -131,18 +151,19 @@ function App() {
       let background1 = (await backgrounds.next()).value;
       while (true) {
         setBackground1Style({
-          background: background1,
+          background: background1.background,
           animation: "fadein 3s",
           opacity: 1,
           zIndex: zIndex,
         });
+        setPhotographer1Info(background1.photographerInfo);
 
         await new Promise((resolve) => setTimeout(resolve, 10000));
 
         const background2 = (await backgrounds.next()).value;
 
         setBackground2Style({
-          background: background2,
+          background: background2.background,
           opacity: 0,
           zIndex: zIndex++,
         });
@@ -150,18 +171,19 @@ function App() {
         await new Promise((resolve) => setTimeout(resolve, 50000));
 
         setBackground2Style({
-          background: background2,
+          background: background2.background,
           animation: "fadein 3s",
           opacity: 1,
           zIndex: zIndex,
         });
+        setPhotographer2Info(background2.photographerInfo);
 
         await new Promise((resolve) => setTimeout(resolve, 10000));
 
         background1 = (await backgrounds.next()).value;
 
         setBackground1Style({
-          background: background1,
+          background: background1.background,
           opacity: 0,
           zIndex: zIndex++,
         });
@@ -175,8 +197,26 @@ function App() {
 
   return (
     <div className="App">
-      <div className="App-background" style={background1Style} />
-      <div className="App-background" style={background2Style} />
+      <div className="App-background" style={background1Style}>
+        <div className="photo-credits">
+          <img
+            src={photographer1Info?.profilePhoto}
+            alt={photographer1Info?.username}
+          />
+          Photo by {photographer1Info?.name}
+          <br />@{photographer1Info?.username}
+        </div>
+      </div>
+      <div className="App-background" style={background2Style}>
+        <div className="photo-credits">
+          <img
+            src={photographer2Info?.profilePhoto}
+            alt={photographer2Info?.username}
+          />
+          Photo by {photographer2Info?.name}
+          <br />@{photographer2Info?.username}
+        </div>
+      </div>
       <canvas
         className="App-visualizer"
         id="visualizer"
