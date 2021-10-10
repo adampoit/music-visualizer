@@ -13,6 +13,11 @@ interface PhotographerInfo {
   profilePhoto: string;
 }
 
+interface AverageInfo {
+  timestamp: number;
+  average: number;
+}
+
 function App() {
   const [background1Style, setBackground1Style] = useState<CSSProperties>();
   const [background2Style, setBackground2Style] = useState<CSSProperties>();
@@ -46,6 +51,10 @@ function App() {
       const numSlices = 250;
       const maxFrequency = 2000;
       const targetFrequencyCoefficient = maxFrequency / Math.pow(numSlices, 2);
+      const historyStorageSeconds = 30;
+
+      const averageHistory: AverageInfo[] = [];
+      let sliceOffset = 0;
 
       function animate() {
         const canvasCtx = canvasRef.current?.getContext("2d");
@@ -58,20 +67,77 @@ function App() {
         const dataArray = new Uint8Array(bufferLength);
         analyzer.getByteFrequencyData(dataArray);
 
-        canvasCtx.clearRect(0, 0, WIDTH, HEIGHT);
-
-        canvasCtx.lineWidth = 5;
-        canvasCtx.strokeStyle = "rgb(255, 255, 255)";
-        canvasCtx.beginPath();
-
         const offset = 200;
         const maxJumpHeight = 100;
         const jumpRate = Math.pow(maxJumpHeight, 1 / 255);
         const radius = HEIGHT / 2 - offset;
         const sliceWidth = (2 * Math.PI) / numSlices;
-        let angle = 0;
-        let initialX = 0;
-        let initialY = 0;
+        let angle = (sliceOffset++ * sliceWidth) / 10;
+
+        canvasCtx.clearRect(0, 0, WIDTH, HEIGHT);
+
+        while (
+          averageHistory[0] &&
+          averageHistory[0].timestamp <
+            Date.now() - historyStorageSeconds * 1000
+        ) {
+          averageHistory.shift();
+        }
+
+        const minAverage = Math.min(...averageHistory.map((x) => x.average));
+        const maxAverage = Math.max(...averageHistory.map((x) => x.average));
+
+        const averageEnergy =
+          dataArray.reduce((total, current) => (total += current)) /
+          dataArray.length;
+
+        averageHistory.push({ timestamp: Date.now(), average: averageEnergy });
+
+        canvasCtx.beginPath();
+        canvasCtx.arc(
+          WIDTH / 2,
+          HEIGHT / 2,
+          radius -
+            50 +
+            50 *
+              Math.min(
+                1,
+                Math.max(
+                  0,
+                  (averageEnergy - minAverage) / (maxAverage - minAverage)
+                )
+              ),
+          0,
+          2 * Math.PI,
+          false
+        );
+        canvasCtx.fillStyle = "black";
+        canvasCtx.fill();
+
+        canvasCtx.lineWidth = 5;
+        canvasCtx.strokeStyle = "rgb(255, 255, 255)";
+
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(WIDTH / 2, HEIGHT / 2);
+        canvasCtx.lineTo(WIDTH / 2 + 25, HEIGHT / 2);
+        canvasCtx.lineTo(WIDTH / 2, HEIGHT / 2 - 50);
+        canvasCtx.lineTo(WIDTH / 2 - 32.5, HEIGHT / 2 + 15);
+        canvasCtx.lineTo(WIDTH / 2 + 49.27, HEIGHT / 2 + 15);
+        canvasCtx.lineTo(WIDTH / 2 + 64.27, HEIGHT / 2 + 45);
+        canvasCtx.lineTo(WIDTH / 2, HEIGHT / 2 - 83.54);
+        canvasCtx.lineTo(WIDTH / 2, HEIGHT / 2 - 83.54);
+        canvasCtx.lineTo(WIDTH / 2 - 64.27, HEIGHT / 2 + 45);
+        canvasCtx.lineTo(WIDTH / 2 - 56.77, HEIGHT / 2 + 30);
+        canvasCtx.lineTo(WIDTH / 2 + 40, HEIGHT / 2 + 30);
+        canvasCtx.lineTo(WIDTH / 2 + 55, HEIGHT / 2 + 60);
+        canvasCtx.lineTo(WIDTH / 2 + 88.54, HEIGHT / 2 + 60);
+        canvasCtx.lineTo(WIDTH / 2, HEIGHT / 2 - 117.08);
+        canvasCtx.lineTo(WIDTH / 2 - 88.54, HEIGHT / 2 + 60);
+        canvasCtx.lineTo(WIDTH / 2 - 55, HEIGHT / 2 + 60);
+        canvasCtx.lineTo(WIDTH / 2 - 47.5, HEIGHT / 2 + 45);
+        canvasCtx.stroke();
+
+        canvasCtx.beginPath();
 
         let currentFrequency = 0;
         let currentBin = 0;
@@ -87,15 +153,15 @@ function App() {
             currentFrequency <
             targetFrequencyCoefficient * Math.pow(i, 2)
           );
-          const e = Math.pow(jumpRate, decibelTotal / binCount);
+          const frequencyEnergy = Math.pow(jumpRate, decibelTotal / binCount);
 
-          const x = (radius + e) * Math.cos(angle) + radius + offset;
-          const y = (radius + e) * Math.sin(angle) + radius + offset;
+          const x =
+            (radius + frequencyEnergy) * Math.cos(angle) + radius + offset;
+          const y =
+            (radius + frequencyEnergy) * Math.sin(angle) + radius + offset;
 
           if (i === 0) {
             canvasCtx.moveTo(x, y);
-            initialX = x;
-            initialY = y;
           } else {
             canvasCtx.lineTo(x, y);
           }
@@ -103,7 +169,7 @@ function App() {
           angle += sliceWidth;
         }
 
-        canvasCtx.lineTo(initialX, initialY);
+        canvasCtx.closePath();
         canvasCtx.stroke();
         requestAnimationFrame(animate);
       }
@@ -120,9 +186,20 @@ function App() {
       background: string;
       photographerInfo: PhotographerInfo;
     }> {
+      const topicResponse = await fetch(
+        "https://api.unsplash.com/topics/wallpapers",
+        {
+          headers: {
+            Authorization: process.env
+              .REACT_APP_UNSPLASH_AUTHORIZATION as string,
+          },
+        }
+      );
+      const topicId = (await topicResponse.json()).id;
+
       while (true) {
         const imagesResponse = await fetch(
-          "https://api.unsplash.com/photos/random?topics=6sMVjTLSkeQ&orientation=landscape&content_filter=high&count=30",
+          `https://api.unsplash.com/photos/random?topics=${topicId}&orientation=landscape&content_filter=high&count=30`,
           {
             headers: {
               Authorization: process.env
@@ -130,8 +207,8 @@ function App() {
             },
           }
         );
-
         const images = await imagesResponse.json();
+
         for (const image of images) {
           yield {
             background: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(${image.urls.raw}&fit=crop&w=${window.innerWidth}&h=${window.innerHeight}) no-repeat center center fixed`,
